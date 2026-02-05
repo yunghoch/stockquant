@@ -1,7 +1,7 @@
 # LASPS v7a 현재 상태
 
 > 최종 업데이트: 2026-02-05
-> 최신 커밋: `0ca8c48` (fix: code review 기반 버그 수정 및 품질 개선)
+> 최신 커밋: `492ac46` (docs: 개발 연속성 문서 추가)
 
 ---
 
@@ -73,14 +73,42 @@
    - Train/Val/Test 시간순 분할
 
 2. **scripts/train.py Phase 2 구현 완성**
-   - 현재 Phase 2는 스텁(stub)으로만 존재 (로그만 출력)
-   - 섹터별 DataLoader 분리 로직 구현 필요
+   - 현재 Phase 2는 스텁(stub)으로만 존재 (`scripts/train.py:118-121`, 로그만 출력)
+   - 구현 필요사항:
+     ```python
+     # 1. 섹터별 DataLoader 분리
+     for sector_id in range(NUM_SECTORS):
+         sector_mask = train_ds.sector_ids == sector_id
+         if sector_mask.sum() < THREE_PHASE_CONFIG["phase2_sector_heads"]["min_samples"]:
+             logger.warning(f"Sector {sector_id}: insufficient data, skip")
+             continue
+         sector_indices = np.where(sector_mask)[0]
+         sector_subset = Subset(train_ds, sector_indices)
+         sector_loader = DataLoader(sector_subset, batch_size=batch_size,
+                                    shuffle=True, collate_fn=stock_collate_fn)
+         # 2. backbone 동결, 해당 sector head만 학습
+         trainer.train_phase2(sector_loader, val_loader,
+                              sector_id=sector_id,
+                              epochs=cfg["epochs"], lr=cfg["lr"])
+     ```
    - `THREE_PHASE_CONFIG["phase2_sector_heads"]["min_samples"]` (10000) 충족 검증
+   - `torch.utils.data.Subset` 사용으로 메모리 효율적 분리
 
 3. **학습 실행 및 검증**
    - Phase 1 → Phase 2 → Phase 3 순차 실행
    - 체크포인트 저장/로드 검증
    - Val/Test 성능 측정 (accuracy, F1, confusion matrix)
+
+### 성능 기준 (목표)
+
+| 지표 | 랜덤 기준 | 최소 목표 | 비고 |
+|------|-----------|----------|------|
+| Accuracy | 33.3% | 40%+ | 3-class 균등 분포 기준 |
+| Macro F1 | 0.33 | 0.38+ | 클래스 불균형 고려 |
+| BUY Precision | 33.3% | 45%+ | BUY 시그널 신뢰도 (가장 중요) |
+| SELL Recall | 33.3% | 40%+ | 손실 회피 목적 |
+
+**참고**: HOLD 클래스가 다수를 차지하므로 (±3% threshold), Macro F1이 Accuracy보다 중요한 지표임.
 
 ### 개선 작업 (선택)
 
@@ -122,6 +150,7 @@
 ## 5. 커밋 히스토리
 
 ```
+492ac46 docs: 개발 연속성 문서 추가 (다른 환경에서 이어서 개발 가능)
 0ca8c48 fix: code review 기반 버그 수정 및 품질 개선 (5개 태스크)
 9ac2700 fix: handle PyTorch 1.8 AdamW crash when sector head has no gradients
 01e868c feat: add daily batch and historical data collection scripts

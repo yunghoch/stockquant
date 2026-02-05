@@ -15,6 +15,45 @@
 | PyTorch | 1.8.0+ | **2.0 아님!** `batch_first` 미지원 |
 | OS | macOS/Linux (개발), Windows (키움 실API) | macOS는 KiwoomMockAPI 사용 |
 
+### 1.1.1 검증된 의존성 버전 (macOS 개발환경)
+
+| 패키지 | 버전 | 비고 |
+|--------|------|------|
+| Python | 3.8.3 (Anaconda) | - |
+| torch | 1.8.1 | `batch_first` 미지원 |
+| pandas | 2.0.3 | Python 3.8에서 동작하지만, 새 환경은 1.x 권장 |
+| numpy | 1.24.4 | - |
+| mplfinance | 0.12.x | - |
+| fastapi | 0.100+ | `on_event` 사용 중 (lifespan 미전환) |
+
+### 1.1.2 Windows 환경 설정 (키움 API 실행 시)
+
+키움 OpenAPI는 **Windows 32-bit Python**에서만 동작합니다:
+
+```bash
+# 1. 32-bit Python 3.8 설치 (x86 installer)
+# https://www.python.org/downloads/ → Windows x86 executable installer
+
+# 2. 키움 OpenAPI+ 설치
+# https://www.kiwoom.com → 다운로드 → OpenAPI+
+
+# 3. 32-bit 가상환경 생성
+python -m venv venv32
+venv32\Scripts\activate
+
+# 4. 의존성 설치
+pip install -r requirements.txt
+
+# 5. 환경변수
+set KIWOOM_ACCOUNT=계좌번호
+set DART_API_KEY=dart_api_key
+
+# 6. 데이터 수집
+python scripts/historical_data.py --output data/processed
+```
+
+**주의**: macOS/Linux에서는 `KiwoomMockAPI`를 사용하므로 키움 설치 불필요.
+
 ### 1.2 초기 설정
 
 ```bash
@@ -31,10 +70,10 @@ pip install -r requirements.txt
 
 # 4. 환경변수 설정 (.env 파일 생성)
 cp .env.example .env
-# .env에 API 키 입력:
-#   KIWOOM_ACCOUNT=계좌번호 (Windows만)
-#   ANTHROPIC_API_KEY=sk-ant-... (LLM 분석용)
-#   DART_API_KEY=... (부채비율 조회용)
+# .env에 API 키 입력 (필수/선택):
+#   ANTHROPIC_API_KEY=sk-ant-...  (필수: LLM 분석 기능)
+#   DART_API_KEY=...              (선택: 부채비율 조회, 없으면 기본값 사용)
+#   KIWOOM_ACCOUNT=계좌번호       (Windows만: 실 키움 API 연동 시)
 
 # 5. 테스트 실행으로 환경 검증
 pytest tests/ -v --tb=short
@@ -62,11 +101,12 @@ v7a_sentiment/
 ├── CLAUDE.md                    # AI 어시스턴트용 프로젝트 가이드
 ├── VIBE_MASTER_v7a_PRD_FINAL.md # 원본 PRD (설계 기준 문서)
 ├── requirements.txt             # Python 의존성
-├── testsen.md                   # 매뉴얼 테스트 시나리오 (32개)
 │
 ├── docs/
 │   ├── DEVELOPMENT_GUIDE.md     # ← 이 문서
 │   ├── CURRENT_STATUS.md        # 현재 진행 상태 및 남은 작업
+│   ├── codereview.md            # 코드 리뷰 결과 및 수정 이력
+│   ├── testsen.md               # 매뉴얼 테스트 시나리오 (32개)
 │   └── plans/
 │       ├── 2026-02-05-lasps-v7a-kiwoom-first.md  # 구현 계획서 (8 Phase)
 │       └── 2026-02-05-lasps-v7a-implementation.md # 이전 계획서 (참고용)
@@ -201,7 +241,83 @@ MODEL_CONFIG = {
 
 ---
 
-## 4. 주요 명령어
+## 4. 학습 데이터 준비
+
+### 4.1 데이터 파일 형식
+
+`StockDataset`은 아래 4개의 npy 파일을 필요로 합니다:
+
+```
+data/processed/
+├── train/
+│   ├── time_series.npy    # (N, 60, 25) float32 - 시계열 피처
+│   ├── chart_images.npy   # (N, 3, 224, 224) float32 - 캔들차트 이미지
+│   ├── sector_ids.npy     # (N,) int64 - 섹터 ID (0~19)
+│   └── labels.npy         # (N,) int64 - 라벨 (0=SELL, 1=HOLD, 2=BUY)
+├── val/
+│   └── (동일 구조)
+└── test/
+    └── (동일 구조)
+```
+
+**라벨 기준**: 5일 후 종가 수익률 기준, +3% 이상 = BUY(2), -3% 이하 = SELL(0), 나머지 = HOLD(1)
+
+### 4.2 실 데이터 수집 (Windows 필요)
+
+```bash
+# Windows에서 키움 OpenAPI 연결 후 실행
+python scripts/historical_data.py --output data/processed
+```
+
+`scripts/historical_data.py`는 현재 **스텁(stub)**으로, 실제 수집 로직 구현이 필요합니다. 구현 순서:
+
+1. 키움 API로 전 종목 10년치 일봉 수집 (OPT10081)
+2. 투자자별 매매동향 수집 (OPT10059)
+3. 기술지표 15개 계산 (`TechnicalIndicatorCalculator`)
+4. 시장감성 5차원 계산 (`MarketSentimentCalculator`)
+5. 캔들차트 이미지 생성 (`ChartGenerator`, 60일 윈도우 슬라이딩)
+6. `normalize_time_series()` 적용 (features 0-19 min-max per stock)
+7. `compute_label()` 적용 (5일 후 수익률 ±3%)
+8. 시간순 분할 → npy 파일 저장
+
+**중요**: MA120에 119일 워밍업이 필요하므로, 180일 이상의 원시 데이터가 있어야 60일 시계열 윈도우를 생성할 수 있습니다.
+
+### 4.3 Mock 데이터로 E2E 테스트
+
+macOS에서 학습 파이프라인을 검증하려면 Mock 데이터를 생성합니다:
+
+```python
+import numpy as np
+from pathlib import Path
+
+def generate_mock_data(output_dir: str, n_samples: int = 500):
+    """Mock 데이터 생성 (학습 파이프라인 E2E 검증용)"""
+    out = Path(output_dir)
+    for split in ["train", "val", "test"]:
+        split_dir = out / split
+        split_dir.mkdir(parents=True, exist_ok=True)
+        n = n_samples if split == "train" else n_samples // 5
+        np.save(split_dir / "time_series.npy",
+                np.random.rand(n, 60, 25).astype(np.float32))
+        np.save(split_dir / "chart_images.npy",
+                np.random.rand(n, 3, 224, 224).astype(np.float32))
+        np.save(split_dir / "sector_ids.npy",
+                np.random.randint(0, 20, size=n).astype(np.int64))
+        np.save(split_dir / "labels.npy",
+                np.random.randint(0, 3, size=n).astype(np.int64))
+    print(f"Mock data saved to {out}")
+
+# 사용: generate_mock_data("data/processed")
+```
+
+생성 후 학습 실행:
+```bash
+python scripts/train.py --data-dir data/processed --device cpu --phase 1
+```
+
+---
+
+## 5. 주요 명령어
 
 ```bash
 # 테스트
@@ -228,7 +344,7 @@ curl -X POST http://localhost:8000/predict -H "Content-Type: application/json" \
 
 ---
 
-## 5. 개발 컨벤션
+## 6. 개발 컨벤션
 
 ### 코딩 규칙
 - **Type hints**: 모든 함수에 필수
@@ -266,7 +382,7 @@ ohlcv = collector.get_daily_ohlcv("005930", days=60)
 
 ---
 
-## 6. 관련 문서
+## 7. 관련 문서
 
 | 문서 | 위치 | 설명 |
 |------|------|------|
