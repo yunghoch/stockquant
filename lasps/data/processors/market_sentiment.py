@@ -42,7 +42,7 @@ class MarketSentimentCalculator:
 
         # 1. volume_ratio
         df["volume_ma20"] = df["volume"].rolling(self.LOOKBACK).mean()
-        df["volume_ratio"] = (df["volume"] / df["volume_ma20"]).clip(0, 3) / 3
+        df["volume_ratio"] = (df["volume"] / df["volume_ma20"].replace(0, np.nan)).clip(0, 3) / 3
 
         # 2. volatility_ratio
         df["true_range"] = np.maximum(
@@ -53,18 +53,18 @@ class MarketSentimentCalculator:
             ),
         )
         df["atr_20"] = df["true_range"].rolling(self.LOOKBACK).mean()
-        df["volatility_ratio"] = (df["true_range"] / df["atr_20"]).clip(0, 3) / 3
+        df["volatility_ratio"] = (df["true_range"] / df["atr_20"].replace(0, np.nan)).clip(0, 3) / 3
 
         # 3. gap_direction
         df["prev_close"] = df["close"].shift(1)
-        df["gap_pct"] = (df["open"] - df["prev_close"]) / df["prev_close"]
+        df["gap_pct"] = (df["open"] - df["prev_close"]) / df["prev_close"].replace(0, np.nan)
         df["gap_direction"] = df["gap_pct"].clip(-0.1, 0.1) * 10
 
         # 4. rsi_norm
         delta = df["close"].diff()
         gain = delta.where(delta > 0, 0).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-        rs = gain / loss
+        rs = gain / loss.replace(0, np.nan)
         df["rsi"] = 100 - (100 / (1 + rs))
         df["rsi_norm"] = df["rsi"] / 100
 

@@ -18,11 +18,15 @@ from loguru import logger
 from lasps.models.sector_aware_model import SectorAwareFusionModel
 from lasps.data.datasets.stock_dataset import StockDataset
 from lasps.training.trainer import ThreePhaseTrainer
-from lasps.config.model_config import MODEL_CONFIG, THREE_PHASE_CONFIG
+from lasps.config.model_config import MODEL_CONFIG, THREE_PHASE_CONFIG, TRAINING_CONFIG
 from lasps.utils.logger import setup_logger
 
+from typing import Dict, List, Tuple
 
-def stock_collate_fn(batch):
+
+def stock_collate_fn(
+    batch: List[Dict[str, torch.Tensor]],
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Convert StockDataset dict batches to tuple format for ThreePhaseTrainer.
 
     StockDataset returns dicts with keys: time_series, chart_image, sector_id, label.
@@ -41,7 +45,7 @@ def stock_collate_fn(batch):
     return time_series, chart_image, sector_id, label
 
 
-def parse_args():
+def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="LASPS v7a Training")
     parser.add_argument("--data-dir", type=str, default="data/processed",
@@ -58,7 +62,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main() -> None:
     """Run LASPS v7a 3-Phase training."""
     args = parse_args()
     setup_logger("INFO")
@@ -69,8 +73,12 @@ def main():
         ts_input_dim=MODEL_CONFIG["linear_transformer"]["input_dim"],
     )
     if args.checkpoint:
-        model.load_state_dict(torch.load(args.checkpoint, map_location=args.device))
-        logger.info(f"Loaded checkpoint: {args.checkpoint}")
+        ckpt_path = Path(args.checkpoint)
+        if not ckpt_path.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {ckpt_path}")
+        state_dict = torch.load(str(ckpt_path), map_location=args.device)
+        model.load_state_dict(state_dict)
+        logger.info(f"Loaded checkpoint: {ckpt_path}")
 
     trainer = ThreePhaseTrainer(model, device=args.device)
 
@@ -91,7 +99,7 @@ def main():
         labels_path=str(data_dir / "val" / "labels.npy"),
     )
 
-    batch_size = 128
+    batch_size = TRAINING_CONFIG["batch_size"]
     train_loader = DataLoader(
         train_ds, batch_size=batch_size, shuffle=True,
         num_workers=4, collate_fn=stock_collate_fn,

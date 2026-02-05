@@ -22,12 +22,13 @@ SECTOR_CODES = {
 }
 
 NUM_SECTORS = 20
+DEFAULT_SECTOR_ID = 17  # 제조업(기타) - 미매핑 업종코드의 기본값
 
 
 def get_sector_id(sector_code: str) -> int:
     if sector_code in SECTOR_CODES:
         return SECTOR_CODES[sector_code][0]
-    return -1
+    return DEFAULT_SECTOR_ID
 
 
 def get_sector_name(sector_id: int) -> str:

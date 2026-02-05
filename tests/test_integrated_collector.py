@@ -5,7 +5,7 @@ from lasps.data.collectors.integrated_collector import IntegratedCollector
 
 @pytest.fixture
 def int_collector():
-    return IntegratedCollector(KiwoomMockAPI(seed=42))
+    return IntegratedCollector(KiwoomMockAPI(seed=42), rate_limit=False)
 
 
 def test_collect_single_stock(int_collector):
@@ -19,5 +19,6 @@ def test_collect_single_stock(int_collector):
 
 def test_collect_batch(int_collector):
     codes = ["005930", "000660", "005380"]
-    results = int_collector.collect_batch(codes)
-    assert len(results) == 3
+    batch = int_collector.collect_batch(codes)
+    assert len(batch["results"]) == 3
+    assert len(batch["failures"]) == 0

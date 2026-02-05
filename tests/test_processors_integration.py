@@ -18,7 +18,7 @@ from lasps.utils.constants import (
 
 @pytest.fixture
 def collector():
-    return KiwoomCollector(KiwoomMockAPI(seed=42))
+    return KiwoomCollector(KiwoomMockAPI(seed=42), rate_limit=False)
 
 
 def test_full_pipeline_single_stock(collector):

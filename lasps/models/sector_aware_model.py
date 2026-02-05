@@ -13,10 +13,11 @@ Architecture:
 
 import torch
 import torch.nn as nn
-from typing import Dict, Iterator
+from typing import Dict, Iterator, Optional
 
 from lasps.models.linear_transformer import LinearTransformerEncoder
 from lasps.models.chart_cnn import ChartCNN
+from lasps.config.model_config import MODEL_CONFIG
 
 
 class SectorAwareFusionModel(nn.Module):
@@ -25,30 +26,49 @@ class SectorAwareFusionModel(nn.Module):
     Args:
         num_sectors: Number of sector-specific classification heads.
         ts_input_dim: Number of input features per time step.
+        config: Optional model config dict. Defaults to MODEL_CONFIG.
     """
 
-    def __init__(self, num_sectors: int = 20, ts_input_dim: int = 25):
+    def __init__(
+        self,
+        num_sectors: int = 20,
+        ts_input_dim: int = 25,
+        config: Optional[Dict] = None,
+    ):
         super().__init__()
+        cfg = config or MODEL_CONFIG
         self.num_sectors = num_sectors
 
+        lt_cfg = cfg["linear_transformer"]
+        cnn_cfg = cfg["cnn"]
+        fusion_cfg = cfg["fusion"]
+
         self.ts_encoder = LinearTransformerEncoder(
-            input_dim=ts_input_dim, hidden_dim=128,
-            num_layers=4, num_heads=4, dropout=0.2,
+            input_dim=ts_input_dim,
+            hidden_dim=lt_cfg["hidden_dim"],
+            num_layers=lt_cfg["num_layers"],
+            num_heads=lt_cfg["num_heads"],
+            dropout=lt_cfg["dropout"],
         )
         self.cnn = ChartCNN(
-            conv_channels=[32, 64, 128, 256], output_dim=128,
+            conv_channels=cnn_cfg["conv_channels"],
+            output_dim=cnn_cfg["output_dim"],
+            dropout=cnn_cfg["dropout"],
         )
+        shared_dim = fusion_cfg["shared_dim"]
         self.shared_fusion = nn.Sequential(
-            nn.Linear(256, 128),
+            nn.Linear(lt_cfg["hidden_dim"] + cnn_cfg["output_dim"], shared_dim),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.Dropout(fusion_cfg["dropout"]),
         )
+        head_hidden = fusion_cfg["sector_head_hidden"]
+        num_classes = fusion_cfg["num_classes"]
         self.sector_heads = nn.ModuleList([
             nn.Sequential(
-                nn.Linear(128, 64),
+                nn.Linear(shared_dim, head_hidden),
                 nn.ReLU(),
-                nn.Dropout(0.2),
-                nn.Linear(64, 3),
+                nn.Dropout(lt_cfg["dropout"]),
+                nn.Linear(head_hidden, num_classes),
             )
             for _ in range(num_sectors)
         ])
@@ -69,6 +89,10 @@ class SectorAwareFusionModel(nn.Module):
         Returns:
             Dict with keys: logits, probabilities, shared_features.
         """
+        assert sector_id.min() >= 0 and sector_id.max() < self.num_sectors, \
+            f"sector_id out of range [0, {self.num_sectors}): " \
+            f"min={sector_id.min().item()}, max={sector_id.max().item()}"
+
         ts_feat = self.ts_encoder(time_series)
         img_feat = self.cnn(chart_image)
         fused = torch.cat([ts_feat, img_feat], dim=1)
@@ -104,6 +128,10 @@ class SectorAwareFusionModel(nn.Module):
         Returns:
             Dict with keys: logits, probabilities.
         """
+        assert sector_id.min() >= 0 and sector_id.max() < self.num_sectors, \
+            f"sector_id out of range [0, {self.num_sectors}): " \
+            f"min={sector_id.min().item()}, max={sector_id.max().item()}"
+
         ts_feat = self.ts_encoder(time_series)
         img_feat = self.cnn(chart_image)
         fused = torch.cat([ts_feat, img_feat], dim=1)

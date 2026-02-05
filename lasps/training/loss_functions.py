@@ -3,6 +3,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import Optional
 
 
 class FocalLoss(nn.Module):
@@ -19,11 +20,18 @@ class FocalLoss(nn.Module):
         weight: Per-class weight tensor for additional class balancing.
     """
 
-    def __init__(self, num_classes: int = 3, gamma: float = 2.0,
-                 weight: torch.Tensor = None):
+    def __init__(
+        self,
+        num_classes: int = 3,
+        gamma: float = 2.0,
+        weight: Optional[torch.Tensor] = None,
+    ):
         super().__init__()
         self.gamma = gamma
-        self.weight = weight
+        if weight is not None:
+            self.register_buffer("weight", weight)
+        else:
+            self.weight: Optional[torch.Tensor] = None
 
     def forward(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         """Compute focal loss.

@@ -8,6 +8,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings:
+    """Application settings loaded from environment variables."""
+
     KIWOOM_ACCOUNT: str = os.getenv("KIWOOM_ACCOUNT", "")
     DART_API_KEY: str = os.getenv("DART_API_KEY", "")
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")

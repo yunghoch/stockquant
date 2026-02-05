@@ -7,17 +7,19 @@ from lasps.data.collectors.kiwoom_collector import KiwoomCollector
 from lasps.data.processors.technical_indicators import TechnicalIndicatorCalculator
 from lasps.data.processors.market_sentiment import MarketSentimentCalculator
 from lasps.data.processors.chart_generator import ChartGenerator
+from lasps.config.sector_config import NUM_SECTORS
 from lasps.utils.constants import (
     OHLCV_FEATURES, INDICATOR_FEATURES, SENTIMENT_FEATURES,
-    TIME_SERIES_LENGTH,
+    TOTAL_FEATURE_DIM, TIME_SERIES_LENGTH,
 )
+from lasps.utils.helpers import normalize_time_series
 
 
 class IntegratedCollector:
     """수집 -> 가공 -> 피처 벡터 + 차트 전체 파이프라인"""
 
-    def __init__(self, kiwoom_api: KiwoomAPIBase):
-        self.kiwoom = KiwoomCollector(kiwoom_api)
+    def __init__(self, kiwoom_api: KiwoomAPIBase, rate_limit: bool = True):
+        self.kiwoom = KiwoomCollector(kiwoom_api, rate_limit=rate_limit)
         self.indicator_calc = TechnicalIndicatorCalculator()
         self.sentiment_calc = MarketSentimentCalculator()
         self.chart_gen = ChartGenerator()
@@ -34,11 +36,34 @@ class IntegratedCollector:
         all_feat = OHLCV_FEATURES + INDICATOR_FEATURES + SENTIMENT_FEATURES
         feature_cols = [c for c in all_feat if c in merged.columns]
 
+        if len(feature_cols) != TOTAL_FEATURE_DIM:
+            missing = [f for f in all_feat if f not in merged.columns]
+            raise ValueError(
+                f"Feature count mismatch: expected {TOTAL_FEATURE_DIM}, "
+                f"got {len(feature_cols)}. Missing: {missing}"
+            )
+
+        sector_id = info["sector_id"]
+        if not (0 <= sector_id < NUM_SECTORS):
+            raise ValueError(
+                f"Invalid sector_id {sector_id} for {stock_code}. "
+                f"Expected range [0, {NUM_SECTORS})"
+            )
+
         valid = merged.dropna(subset=feature_cols)
+        if len(valid) < TIME_SERIES_LENGTH:
+            raise ValueError(
+                f"Insufficient data for {stock_code}: "
+                f"got {len(valid)} rows, need {TIME_SERIES_LENGTH}"
+            )
+
         recent = valid.tail(TIME_SERIES_LENGTH)
         time_series_25d = recent[feature_cols].values.astype(np.float32)
+        time_series_25d = normalize_time_series(time_series_25d)
 
-        chart_ohlcv = ohlcv.tail(TIME_SERIES_LENGTH).copy()
+        # Use same date range as time series for chart (temporal alignment)
+        chart_dates = recent["date"].values
+        chart_ohlcv = ohlcv[ohlcv["date"].isin(chart_dates)].copy()
         chart_ohlcv.index = pd.to_datetime(chart_ohlcv["date"])
         chart_df = chart_ohlcv.rename(columns={
             "open": "Open", "high": "High", "low": "Low",
@@ -55,13 +80,27 @@ class IntegratedCollector:
             "sector_id": info["sector_id"],
         }
 
-    def collect_batch(self, stock_codes: List[str]) -> List[Dict]:
-        results = []
+    def collect_batch(self, stock_codes: List[str]) -> Dict[str, List]:
+        """배치 수집. 성공/실패 결과를 분리하여 반환.
+
+        Args:
+            stock_codes: 종목코드 리스트.
+
+        Returns:
+            Dict with 'results' (성공 데이터 리스트) and 'failures' (실패 정보 리스트).
+        """
+        results: List[Dict] = []
+        failures: List[Dict] = []
         for code in stock_codes:
             try:
                 data = self.collect_stock_data(code)
                 results.append(data)
                 logger.info(f"Collected {code}: {data['info']['name']}")
             except Exception as e:
+                failures.append({"code": code, "error": str(e)})
                 logger.error(f"Failed to collect {code}: {e}")
-        return results
+        if failures:
+            logger.warning(
+                f"Batch complete: {len(results)} success, {len(failures)} failed"
+            )
+        return {"results": results, "failures": failures}

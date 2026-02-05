@@ -50,7 +50,7 @@ def test_mock_get_investor_data():
 
 @pytest.fixture
 def collector():
-    return KiwoomCollector(KiwoomMockAPI(seed=42))
+    return KiwoomCollector(KiwoomMockAPI(seed=42), rate_limit=False)
 
 
 def test_collector_get_stock_info(collector):

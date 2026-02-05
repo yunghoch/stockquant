@@ -33,7 +33,10 @@ def test_sector_ids_unique():
 def test_get_sector_id():
     assert get_sector_id("001") == 0
     assert get_sector_id("020") == 19
-    assert get_sector_id("999") == -1
+    # 미매핑 업종코드는 기본 섹터(17: 제조업(기타))로 매핑
+    from lasps.config.sector_config import DEFAULT_SECTOR_ID
+    assert get_sector_id("999") == DEFAULT_SECTOR_ID
+    assert 0 <= get_sector_id("999") < 20
 
 
 def test_get_sector_name():

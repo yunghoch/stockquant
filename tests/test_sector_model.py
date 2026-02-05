@@ -44,3 +44,21 @@ def test_freeze_unfreeze(model):
 def test_sector_head_params(model):
     params = list(model.get_sector_head_params(0))
     assert len(params) == 4
+
+
+def test_invalid_sector_id_raises(model):
+    bs = 2
+    ts = torch.randn(bs, 60, 25)
+    img = torch.randn(bs, 3, 224, 224)
+    sid = torch.tensor([-1, 0])
+    with pytest.raises(AssertionError, match="sector_id out of range"):
+        model(ts, img, sid)
+
+
+def test_invalid_sector_id_efficient_raises(model):
+    bs = 2
+    ts = torch.randn(bs, 60, 25)
+    img = torch.randn(bs, 3, 224, 224)
+    sid = torch.tensor([20, 0])
+    with pytest.raises(AssertionError, match="sector_id out of range"):
+        model.forward_efficient(ts, img, sid)

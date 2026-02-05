@@ -27,6 +27,7 @@ class TechnicalIndicatorCalculator:
         gain = delta.where(delta > 0, 0.0).rolling(14).mean()
         loss = (-delta.where(delta < 0, 0.0)).rolling(14).mean()
         rs = gain / loss.replace(0, np.nan)
+        rs = rs.fillna(0)
         df["rsi"] = 100 - (100 / (1 + rs))
 
         # 모멘텀: MACD(12,26,9)
@@ -41,7 +42,7 @@ class TechnicalIndicatorCalculator:
         bb_std = df["close"].rolling(20).std()
         df["bb_upper"] = df["bb_middle"] + 2 * bb_std
         df["bb_lower"] = df["bb_middle"] - 2 * bb_std
-        df["bb_width"] = (df["bb_upper"] - df["bb_lower"]) / df["bb_middle"]
+        df["bb_width"] = (df["bb_upper"] - df["bb_lower"]) / df["bb_middle"].replace(0, np.nan)
 
         # 변동성: ATR(14)
         high_low = df["high"] - df["low"]

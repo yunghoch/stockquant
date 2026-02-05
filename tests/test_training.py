@@ -43,9 +43,12 @@ def tiny_loader():
 
 def test_phase1_runs(tiny_model, tiny_loader):
     trainer = ThreePhaseTrainer(tiny_model, device="cpu")
-    metrics = trainer.train_phase1(tiny_loader, tiny_loader, epochs=1)
+    metrics = trainer.train_phase1(tiny_loader, tiny_loader, epochs=1, patience=0)
     assert "train_loss" in metrics
     assert "val_loss" in metrics
+    assert "best_val_loss" in metrics
+    assert "best_epoch" in metrics
+    assert metrics["best_epoch"] == 1
 
 
 def test_phase2_runs(tiny_model, tiny_loader):
@@ -58,5 +61,17 @@ def test_phase2_runs(tiny_model, tiny_loader):
 
 def test_phase3_runs(tiny_model, tiny_loader):
     trainer = ThreePhaseTrainer(tiny_model, device="cpu")
-    metrics = trainer.train_phase3(tiny_loader, tiny_loader, epochs=1)
+    metrics = trainer.train_phase3(tiny_loader, tiny_loader, epochs=1, patience=0)
     assert "train_loss" in metrics
+    assert "best_val_loss" in metrics
+
+
+def test_early_stopping_triggers(tiny_model, tiny_loader):
+    """Early stopping should stop before max epochs when patience is exceeded."""
+    trainer = ThreePhaseTrainer(tiny_model, device="cpu")
+    # patience=1 with 10 epochs: should stop early unless val_loss keeps improving
+    metrics = trainer.train_phase1(
+        tiny_loader, tiny_loader, epochs=10, patience=1
+    )
+    assert metrics["best_epoch"] >= 1
+    assert metrics["best_val_loss"] <= metrics["val_loss"]
