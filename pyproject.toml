@@ -12,3 +12,7 @@ requires-python = ">=3.8"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --tb=short"
+markers = [
+    "kiwoom: live Kiwoom OpenAPI tests (require Windows + login)",
+    "db: database tests (require PostgreSQL for integration)",
+]

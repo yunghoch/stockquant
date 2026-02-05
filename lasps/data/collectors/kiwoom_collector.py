@@ -110,15 +110,24 @@ class KiwoomCollector:
         Raises:
             ConnectionError: API 요청 실패 시.
         """
-        resp = self._request("OPT10059", 종목코드=stock_code)
+        today = pd.Timestamp.today().strftime("%Y%m%d")
+        resp = self._request(
+            "OPT10059",
+            일자=today, 종목코드=stock_code,
+            금액수량구분="2", 매매구분="0", 단위구분="1",
+        )
         if not isinstance(resp, list):
             resp = [resp]
         rows = []
         for r in resp[:days]:
+            # 실제 API: "외국인순매수", Mock: "외국인순매수"
+            foreign = r.get("외국인순매수", r.get("외국인", 0))
+            # 실제 API: "기관계", Mock: "기관계순매수"
+            inst = r.get("기관계순매수", r.get("기관계", 0))
             rows.append({
                 "date": pd.to_datetime(r["일자"]),
-                "foreign_net": int(r.get("외국인순매수", 0)),
-                "inst_net": int(r.get("기관계순매수", 0)),
+                "foreign_net": int(foreign),
+                "inst_net": int(inst),
             })
         return pd.DataFrame(rows).sort_values("date").reset_index(drop=True)
 
@@ -134,7 +143,12 @@ class KiwoomCollector:
         Raises:
             ConnectionError: API 요청 실패 시.
         """
-        resp = self._request("OPT10014", 종목코드=stock_code)
+        today = pd.Timestamp.today().strftime("%Y%m%d")
+        start = (pd.Timestamp.today() - pd.DateOffset(years=1)).strftime("%Y%m%d")
+        resp = self._request(
+            "OPT10014",
+            종목코드=stock_code, 시작일자=start, 종료일자=today,
+        )
         if not isinstance(resp, list):
             resp = [resp]
         rows = []

@@ -19,5 +19,14 @@ class Settings:
     RAW_DATA_DIR: Path = DATA_DIR / "raw"
     PROCESSED_DATA_DIR: Path = DATA_DIR / "processed"
 
+    # SQLite
+    DATABASE_PATH: Path = Path(
+        os.getenv("DATABASE_PATH", str(BASE_DIR / "data" / "lasps.db"))
+    )
+
+    @property
+    def DATABASE_URL(self) -> str:
+        return f"sqlite:///{self.DATABASE_PATH}"
+
 
 settings = Settings()
