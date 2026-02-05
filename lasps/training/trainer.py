@@ -58,11 +58,11 @@ class ThreePhaseTrainer:
                 if is_train:
                     optimizer.zero_grad()
                     loss.backward()
-                    nn.utils.clip_grad_norm_(
-                        [p for p in self.model.parameters() if p.requires_grad],
-                        max_norm=1.0,
-                    )
-                    optimizer.step()
+                    trainable = [p for p in self.model.parameters() if p.requires_grad]
+                    nn.utils.clip_grad_norm_(trainable, max_norm=1.0)
+                    has_grad = any(p.grad is not None for g in optimizer.param_groups for p in g["params"])
+                    if has_grad:
+                        optimizer.step()
                 total_loss += loss.item()
                 n_batches += 1
         return total_loss / max(n_batches, 1)
@@ -107,9 +107,8 @@ class ThreePhaseTrainer:
         logger.info("Phase 2: Sector Heads (backbone frozen)")
         self.model.freeze_backbone()
         for sector_id, loader in sector_loaders.items():
-            optimizer = torch.optim.AdamW(
-                self.model.get_sector_head_params(sector_id), lr=lr,
-            )
+            params = list(self.model.get_sector_head_params(sector_id))
+            optimizer = torch.optim.AdamW(params, lr=lr)
             for epoch in range(epochs_per_sector):
                 loss = self._run_epoch(loader, optimizer)
                 logger.info(f"Phase2 Sector {sector_id} [{epoch+1}/{epochs_per_sector}] loss={loss:.4f}")
