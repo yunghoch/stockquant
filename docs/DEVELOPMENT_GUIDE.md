@@ -5,6 +5,69 @@
 
 ---
 
+## 0. 빠른 시작 가이드
+
+새 컴퓨터에서 아래 순서대로 진행하면 됩니다.
+
+### Step 1: 코드 받기
+
+```bash
+git clone https://github.com/yunghoch/stockquant.git
+cd stockquant/v7a_sentiment
+```
+
+### Step 2: 문서 읽기
+
+| 순서 | 문서 | 목적 |
+|------|------|------|
+| 1 | `docs/DEVELOPMENT_GUIDE.md` (이 문서) | 환경 설정, 구조, 아키텍처, 학습 데이터 준비 |
+| 2 | `docs/CURRENT_STATUS.md` | 현재 진행 상태, 남은 작업, 성능 기준 |
+
+필요할 때 참고:
+
+| 문서 | 언제 읽나 |
+|------|----------|
+| `CLAUDE.md` | AI 어시스턴트에게 작업 요청할 때 (자동 로드됨) |
+| `docs/codereview.md` | 미수정 이슈(#2, #9~12) 작업할 때 |
+| `docs/testsen.md` | 수정한 코드 수동 검증할 때 |
+| `VIBE_MASTER_v7a_PRD_FINAL.md` | 설계 의도/요구사항 확인할 때 |
+| `docs/plans/2026-02-05-lasps-v7a-kiwoom-first.md` | 원래 구현 계획 확인할 때 |
+
+### Step 3: 환경 설정
+
+```bash
+conda create -n lasps python=3.8
+conda activate lasps
+pip install -r requirements.txt
+
+cp .env.example .env
+# .env 편집: ANTHROPIC_API_KEY 입력 (필수)
+```
+
+### Step 4: 환경 검증
+
+```bash
+pytest tests/ -v --tb=short
+# 기대 결과: 65 passed
+```
+
+### Step 5: 남은 작업 착수
+
+`docs/CURRENT_STATUS.md` 섹션 3에 나온 우선순위대로:
+
+| 순서 | 작업 | 환경 | 참고 |
+|------|------|------|------|
+| 1 | `scripts/historical_data.py` 구현 → 과거 데이터 수집 | Windows (키움 API) | 섹션 1.1.2, 4.2 |
+| 2 | `scripts/train.py` Phase 2 구현 (섹터별 DataLoader) | 아무 OS | CURRENT_STATUS.md 섹션 3 |
+| 3 | Mock 데이터로 Phase 1→3 학습 파이프라인 E2E 검증 | macOS 가능 | 섹션 4.3 |
+| 4 | 실 데이터로 학습 실행 및 성능 측정 | GPU 권장 | CURRENT_STATUS.md 성능 기준 |
+
+**macOS에서 바로 시작할 수 있는 작업**: 2번(Phase 2 구현) + 3번(Mock E2E 검증)
+
+**Windows가 필요한 작업**: 1번(키움 API 데이터 수집)
+
+---
+
 ## 1. 환경 설정
 
 ### 1.1 필수 요구사항
