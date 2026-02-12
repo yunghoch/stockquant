@@ -1,6 +1,6 @@
 """Linear Transformer Encoder for time series data.
 
-Encodes (batch, seq_len=60, input_dim=25) time series into
+Encodes (batch, seq_len=60, input_dim=28) time series into
 (batch, hidden_dim=128) feature vectors using a standard
 Transformer encoder with learnable positional encoding.
 """
@@ -12,7 +12,7 @@ import torch.nn as nn
 class LinearTransformerEncoder(nn.Module):
     """Linear Transformer for time series encoding.
 
-    Input: (batch, seq_len=60, input_dim=25)
+    Input: (batch, seq_len=60, input_dim=28)
     Output: (batch, hidden_dim=128)
 
     Uses CLS-token-style extraction: returns the first position
@@ -29,7 +29,7 @@ class LinearTransformerEncoder(nn.Module):
 
     def __init__(
         self,
-        input_dim: int = 25,
+        input_dim: int = 28,
         hidden_dim: int = 128,
         num_layers: int = 4,
         num_heads: int = 4,

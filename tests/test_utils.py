@@ -43,7 +43,7 @@ def test_classification_metrics():
 def test_normalize_time_series_basic():
     """Test min-max normalization produces [0,1] for features 0-19."""
     from lasps.utils.helpers import normalize_time_series
-    data = np.random.rand(60, 25) * 1000  # random large-scale data
+    data = np.random.rand(60, 28) * 1000  # random large-scale data
     result = normalize_time_series(data)
     # OHLCV + indicators (0-19) should be in [0, 1]
     assert result[:, :20].min() >= 0.0
@@ -55,7 +55,7 @@ def test_normalize_time_series_basic():
 def test_normalize_time_series_constant_feature():
     """Test constant features map to 0.5."""
     from lasps.utils.helpers import normalize_time_series
-    data = np.ones((60, 25)) * 42.0
+    data = np.ones((60, 28)) * 42.0
     result = normalize_time_series(data)
     # Constant OHLCV+indicator features should be 0.5
     assert np.allclose(result[:, :20], 0.5)
@@ -66,7 +66,7 @@ def test_normalize_time_series_constant_feature():
 def test_normalize_time_series_shape_preserved():
     """Test output shape matches input."""
     from lasps.utils.helpers import normalize_time_series
-    data = np.random.rand(60, 25).astype(np.float32)
+    data = np.random.rand(60, 28).astype(np.float32)
     result = normalize_time_series(data)
-    assert result.shape == (60, 25)
+    assert result.shape == (60, 28)
     assert result.dtype == np.float32

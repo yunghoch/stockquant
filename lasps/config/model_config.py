@@ -1,7 +1,7 @@
 MODEL_CONFIG = {
-    "num_sectors": 20,
+    "num_sectors": 13,  # v3: 20개 → 13개 병합 (0~12)
     "linear_transformer": {
-        "input_dim": 25,
+        "input_dim": 28,  # 25 (OHLCV+indicators+sentiment) + 3 (temporal: weekday/month/day)
         "hidden_dim": 128,
         "num_layers": 4,
         "num_heads": 4,
@@ -23,7 +23,9 @@ MODEL_CONFIG = {
 }
 
 TRAINING_CONFIG = {
-    "batch_size": 128,
+    "batch_size": 64,  # Multi-GPU에서 128 (64 * 2 GPU)
+    "gradient_accumulation_steps": 2,  # effective_batch = 128 * 2 = 256
+    "use_amp": True,  # Mixed Precision Training (메모리 40-50% 절감)
     "learning_rate": 1e-4,
     "weight_decay": 1e-5,
     "gradient_clip": 1.0,
@@ -31,10 +33,11 @@ TRAINING_CONFIG = {
 
 THREE_PHASE_CONFIG = {
     "phase1_backbone": {
-        "epochs": 30,
+        "epochs": 35,
         "lr": 1e-4,
         "scheduler": "cosine",
         "warmup_epochs": 5,
+        "patience": 7,
     },
     "phase2_sector_heads": {
         "epochs_per_sector": 10,
@@ -45,9 +48,10 @@ THREE_PHASE_CONFIG = {
         "min_samples": 10000,
     },
     "phase3_finetune": {
-        "epochs": 5,
+        "epochs": 8,
         "lr": 1e-5,
         "scheduler": "cosine",
+        "patience": 7,
     },
 }
 

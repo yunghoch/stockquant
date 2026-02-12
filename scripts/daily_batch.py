@@ -52,7 +52,7 @@ def main() -> None:
     logger.info("Step 7: Computing indicators + generating charts")
 
     # 8. 시계열 구성
-    logger.info("Step 8: Assembling time series (60, 25)")
+    logger.info("Step 8: Assembling time series (60, 28)")
 
     # 9. Sector-Aware 예측
     logger.info("Step 9: Running Sector-Aware predictions")

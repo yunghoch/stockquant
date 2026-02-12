@@ -27,13 +27,13 @@ def test_focal_loss_perfect_prediction():
 
 @pytest.fixture
 def tiny_model():
-    return SectorAwareFusionModel(num_sectors=3, ts_input_dim=25)
+    return SectorAwareFusionModel(num_sectors=3, ts_input_dim=28)
 
 
 @pytest.fixture
 def tiny_loader():
     n = 16
-    ts = torch.randn(n, 60, 25)
+    ts = torch.randn(n, 60, 28)
     img = torch.randn(n, 3, 224, 224)
     sid = torch.randint(0, 3, (n,))
     labels = torch.randint(0, 3, (n,))

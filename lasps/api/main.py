@@ -77,13 +77,13 @@ async def predict(request: PredictionRequest) -> List[PredictionResponse]:
 
 @app.get("/sectors")
 async def list_sectors() -> dict:
-    """List all available sector codes with IDs and names.
+    """List all available sectors with IDs and names.
 
     Returns:
-        Dict mapping sector code to {id, name}.
+        Dict mapping sector_id to name. (13 sectors in v3)
     """
-    from lasps.config.sector_config import SECTOR_CODES
+    from lasps.config.sector_config import SECTOR_NAMES, NUM_SECTORS
     return {
-        code: {"id": sid, "name": name}
-        for code, (sid, name, _) in SECTOR_CODES.items()
+        "num_sectors": NUM_SECTORS,
+        "sectors": {str(sid): name for sid, name in SECTOR_NAMES.items()},
     }

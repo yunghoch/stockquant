@@ -8,12 +8,12 @@ from lasps.models.sector_aware_model import SectorAwareFusionModel
 
 @pytest.fixture
 def predictor():
-    model = SectorAwareFusionModel(num_sectors=20, ts_input_dim=25)
+    model = SectorAwareFusionModel(num_sectors=13, ts_input_dim=28)
     return SectorAwarePredictor(model, device="cpu")
 
 
 def test_predict_single(predictor):
-    ts = torch.randn(1, 60, 25)
+    ts = torch.randn(1, 60, 28)
     img = torch.randn(1, 3, 224, 224)
     sid = torch.tensor([0])
     result = predictor.predict(ts, img, sid)
@@ -23,8 +23,8 @@ def test_predict_single(predictor):
 
 def test_predict_batch(predictor):
     bs = 8
-    ts = torch.randn(bs, 60, 25)
+    ts = torch.randn(bs, 60, 28)
     img = torch.randn(bs, 3, 224, 224)
-    sid = torch.randint(0, 20, (bs,))
+    sid = torch.randint(0, 13, (bs,))
     result = predictor.predict_batch(ts, img, sid)
     assert len(result["predictions"]) == bs

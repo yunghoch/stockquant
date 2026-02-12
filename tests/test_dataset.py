@@ -7,9 +7,9 @@ from lasps.data.datasets.stock_dataset import StockDataset
 @pytest.fixture
 def dummy_dataset(tmp_path):
     n_samples = 50
-    time_series = np.random.randn(n_samples, 60, 25).astype(np.float32)
+    time_series = np.random.randn(n_samples, 60, 28).astype(np.float32)
     chart_images = np.random.rand(n_samples, 3, 224, 224).astype(np.float32)
-    sector_ids = np.random.randint(0, 20, n_samples).astype(np.int64)
+    sector_ids = np.random.randint(0, 13, n_samples).astype(np.int64)
     labels = np.random.randint(0, 3, n_samples).astype(np.int64)
 
     np.save(tmp_path / "time_series.npy", time_series)
@@ -31,7 +31,7 @@ def test_dataset_length(dummy_dataset):
 
 def test_dataset_item_shapes(dummy_dataset):
     item = dummy_dataset[0]
-    assert item["time_series"].shape == (60, 25)
+    assert item["time_series"].shape == (60, 28)
     assert item["chart_image"].shape == (3, 224, 224)
     assert item["sector_id"].shape == ()
     assert item["label"].shape == ()
