@@ -51,4 +51,3 @@ class IndicatorRepository(BaseRepository[TechnicalIndicator]):
             set_=update_cols,
         )
         self.session.execute(stmt)
-        self.session.expire_all()

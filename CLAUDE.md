@@ -9,13 +9,13 @@ LASPS (LLM-Augmented Stock Prediction System) v7a는 한국 주식시장을 대�
 - **2-Branch Fusion Model**: Linear Transformer(시계열) + CNN(차트 이미지)
 - **20 Sector-Specific Heads**: 섹터별 전용 분류기 (128 → 64 → 3)
 - **3-Phase Training**: Backbone → Sector Heads → End-to-End Fine-tune
-- **입력**: (60, 25) 시계열 + (3, 224, 224) 캔들차트 + sector_id
+- **입력**: (60, 28) 시계열 + (3, 224, 224) 캔들차트 + sector_id
 - **출력**: 3-class 분류 (SELL=0, HOLD=1, BUY=2)
 
 ## Key Constants
 
 ```
-TIME_SERIES_SHAPE = (60, 25)      # OHLCV(5) + 지표(15) + 감성(5)
+TIME_SERIES_SHAPE = (60, 28)      # OHLCV(5) + 지표(15) + 감성(5) + temporal(3)
 CHART_IMAGE_SHAPE = (3, 224, 224)
 NUM_SECTORS = 20
 NUM_CLASSES = 3
@@ -70,7 +70,7 @@ Kiwoom OpenAPI
 ├── OPT10059: 투자자별 → foreign_inst_flow (감성 5번째)
 └── OPT10014: 공매도 (보조)
          ↓
-[시계열 (60, 25)] + [차트 이미지 (3, 224, 224)] + [sector_id]
+[시계열 (60, 28)] + [차트 이미지 (3, 224, 224)] + [sector_id]
          ↓
 SectorAwareFusionModel
 ├── LinearTransformerEncoder → 128-dim
@@ -79,7 +79,7 @@ SectorAwareFusionModel
 └── SectorHead[sector_id]: 128 → 64 → 3 (SELL/HOLD/BUY)
 ```
 
-## 25-Feature Breakdown
+## 28-Feature Breakdown
 
 | Index | Features | Count |
 |-------|----------|-------|
@@ -89,6 +89,13 @@ SectorAwareFusionModel
 | 13-17 | BB upper/middle/lower/width, ATR | 5 |
 | 18-19 | OBV, Volume MA20 | 2 |
 | 20-24 | Sentiment (volume_ratio, volatility_ratio, gap_direction, rsi_norm, foreign_inst_flow) | 5 |
+| 25-27 | Temporal (weekday, month, day) | 3 |
+
+### Temporal Features (v2)
+
+- **weekday**: 요일 정규화 (월=0, 금=0.8) - `weekday() / 4.0`
+- **month**: 월 정규화 (1월=0.08, 12월=1.0) - `month / 12.0`
+- **day**: 일 정규화 (1일=0.03, 31일=1.0) - `day / 31.0`
 
 ## Market Sentiment 5D (Key Innovation)
 
@@ -126,12 +133,37 @@ SectorAwareFusionModel
 # 테스트 실행
 pytest tests/ -v --tb=short
 
+# v2 학습 데이터 생성 (ETF 제외 + temporal features)
+python scripts/generate_dataset_v2.py --output data/processed_v2
+
 # 학습
-python scripts/train.py --device cuda --data-dir data/processed
+python scripts/train.py --device cuda --data-dir data/processed_v2
 
 # 일일 배치
 python scripts/daily_batch.py
 
 # API 서버
 uvicorn lasps.api.main:app --reload --port 8000
+```
+
+## Claude 작업 규칙
+
+### 작업 로그 기록 (필수)
+
+모든 새로운 작업은 `docs/plans/donelog.md`에 기록해야 한다:
+
+1. **새 파일/스크립트 생성** 시 기록
+2. **학습/배치 작업 실행** 시 기록 (시작, 종료, 결과)
+3. **중요한 설정 변경** 시 기록
+4. **문제 발견 및 해결** 시 기록
+
+로그 형식:
+```markdown
+## YYYY-MM-DD
+
+### [시간] 작업 제목
+- **작업**: 수행한 내용
+- **명령어**: 실행한 명령 (해당 시)
+- **결과**: 결과 또는 상태
+- **비고**: 추가 참고사항
 ```

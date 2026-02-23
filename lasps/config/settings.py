@@ -24,6 +24,16 @@ class Settings:
         os.getenv("DATABASE_PATH", str(BASE_DIR / "data" / "lasps.db"))
     )
 
+    # Data Quality Filtering
+    MIN_DAILY_PRICE_ROWS: int = 1500  # 최소 6년치 데이터 (학습 포함 기준)
+
+    # Class Weights for Imbalanced Classification
+    # SELL=24.4%, HOLD=53.6%, BUY=21.9% → 역수 정규화
+    # SELL: 1/0.244 = 4.10 → normalized 2.05
+    # HOLD: 1/0.536 = 1.87 → normalized 0.93
+    # BUY:  1/0.219 = 4.57 → normalized 2.28
+    CLASS_WEIGHTS: tuple = (2.05, 0.93, 2.28)  # (SELL, HOLD, BUY)
+
     @property
     def DATABASE_URL(self) -> str:
         return f"sqlite:///{self.DATABASE_PATH}"

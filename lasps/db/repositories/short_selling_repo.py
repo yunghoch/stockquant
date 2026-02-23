@@ -53,4 +53,3 @@ class ShortSellingRepository(BaseRepository[ShortSelling]):
             },
         )
         self.session.execute(stmt)
-        self.session.expire_all()

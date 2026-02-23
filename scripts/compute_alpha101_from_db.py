@@ -27,18 +27,23 @@ from lasps.data.processors.alpha101 import Alpha101Calculator
 
 
 def load_ohlcv_from_db(db_path: str, start_date: str = None, end_date: str = None) -> dict:
-    """Load OHLCV data from SQLite and pivot to panel format.
+    """Load OHLCV + VWAP + Cap + Industry data from SQLite.
 
     Returns:
-        Dict with 'open', 'high', 'low', 'close', 'volume' DataFrames
+        Dict with 'open', 'high', 'low', 'close', 'volume' DataFrames,
+        plus optional 'vwap', 'cap' DataFrames and 'industry' Series
         Each DataFrame has index=dates, columns=stock_codes
     """
     logger.info(f"Loading data from {db_path}...")
 
     conn = sqlite3.connect(db_path)
 
-    # Build query
-    query = "SELECT stock_code, date, open, high, low, close, volume FROM daily_prices"
+    # Build query - include trading_value and market_cap_daily
+    query = """
+        SELECT stock_code, date, open, high, low, close, volume,
+               trading_value, market_cap_daily
+        FROM daily_prices
+    """
     conditions = []
     if start_date:
         conditions.append(f"date >= '{start_date}'")
@@ -50,6 +55,9 @@ def load_ohlcv_from_db(db_path: str, start_date: str = None, end_date: str = Non
 
     logger.info("Executing query...")
     df = pd.read_sql(query, conn, parse_dates=['date'])
+
+    # Load industry data
+    industry_df = pd.read_sql("SELECT code, sector_id FROM stocks", conn)
     conn.close()
 
     logger.info(f"Loaded {len(df):,} rows")
@@ -67,7 +75,34 @@ def load_ohlcv_from_db(db_path: str, start_date: str = None, end_date: str = Non
     # Convert volume to float
     ohlcv['volume'] = ohlcv['volume'].astype(float)
 
-    logger.info(f"Panel shape: {ohlcv['close'].shape} (dates × stocks)")
+    # VWAP = trading_value / volume
+    has_vwap = df['trading_value'].notna().sum()
+    if has_vwap > 0:
+        logger.info(f"  Pivoting VWAP (trading_value available: {has_vwap:,} rows)...")
+        tv_pivot = df.pivot(index='date', columns='stock_code', values='trading_value').astype(float)
+        vol_pivot = ohlcv['volume']
+        ohlcv['vwap'] = tv_pivot / vol_pivot.replace(0, np.nan)
+        vwap_valid = ohlcv['vwap'].notna().sum().sum()
+        logger.info(f"  VWAP valid values: {vwap_valid:,}")
+    else:
+        logger.warning("  No trading_value data. VWAP not available.")
+        ohlcv['vwap'] = None
+
+    # Market cap
+    has_cap = df['market_cap_daily'].notna().sum()
+    if has_cap > 0:
+        logger.info(f"  Pivoting market cap (available: {has_cap:,} rows)...")
+        ohlcv['cap'] = df.pivot(index='date', columns='stock_code', values='market_cap_daily').astype(float)
+    else:
+        logger.warning("  No market_cap_daily data. Cap not available.")
+        ohlcv['cap'] = None
+
+    # Industry (sector_id)
+    industry = industry_df.set_index('code')['sector_id']
+    ohlcv['industry'] = industry
+    logger.info(f"  Industry: {len(industry)} stocks mapped to {industry.nunique()} sectors")
+
+    logger.info(f"Panel shape: {ohlcv['close'].shape} (dates x stocks)")
 
     return ohlcv
 
@@ -89,20 +124,29 @@ def compute_and_save_alphas(ohlcv: dict, output_dir: Path, batch_size: int = 20)
         low=ohlcv['low'],
         close=ohlcv['close'],
         volume=ohlcv['volume'],
+        vwap=ohlcv.get('vwap'),
+        cap=ohlcv.get('cap'),
+        industry=ohlcv.get('industry'),
     )
 
-    # Get list of simple alphas (no industry neutralization needed)
+    # Get list of all computable alphas
     simple_alpha_ids = calc.simple_alphas.get_implemented_alphas()
-    logger.info(f"Computing {len(simple_alpha_ids)} simple alphas...")
+    industry_alpha_ids = []
+    if calc.industry_alphas is not None:
+        industry_alpha_ids = calc.industry_alphas.get_implemented_alphas()
+
+    all_alpha_ids = sorted(set(simple_alpha_ids + industry_alpha_ids))
+    logger.info(f"Computing {len(all_alpha_ids)} alphas "
+                f"({len(simple_alpha_ids)} simple + {len(industry_alpha_ids)} industry)...")
 
     # Track results
     computed = []
     failed = []
 
     # Compute alphas in batches
-    for i, alpha_id in enumerate(simple_alpha_ids):
+    for i, alpha_id in enumerate(all_alpha_ids):
         try:
-            logger.info(f"[{i+1}/{len(simple_alpha_ids)}] Computing Alpha #{alpha_id}...")
+            logger.info(f"[{i+1}/{len(all_alpha_ids)}] Computing Alpha #{alpha_id}...")
             alpha_df = calc.compute(alpha_id)
 
             # Save to parquet
@@ -136,7 +180,7 @@ def compute_and_save_alphas(ohlcv: dict, output_dir: Path, batch_size: int = 20)
         'date_range': [str(ohlcv['close'].index.min()), str(ohlcv['close'].index.max())],
         'num_dates': len(ohlcv['close']),
         'num_stocks': len(ohlcv['close'].columns),
-        'total_alphas': len(simple_alpha_ids),
+        'total_alphas': len(all_alpha_ids),
         'computed': len(computed),
         'failed': len(failed),
     }

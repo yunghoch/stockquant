@@ -1,7 +1,8 @@
 import datetime
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import and_
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from lasps.db.models.training_label import TrainingLabel
@@ -51,3 +52,28 @@ class TrainingLabelRepository(BaseRepository[TrainingLabel]):
             .order_by(TrainingLabel.date)
             .all()
         )
+
+    def upsert(
+        self,
+        stock_code: str,
+        date: datetime.date,
+        label: int,
+        split: str,
+        sector_id: Optional[int] = None,
+    ) -> None:
+        stmt = sqlite_insert(TrainingLabel).values(
+            stock_code=stock_code,
+            date=date,
+            label=label,
+            split=split,
+            sector_id=sector_id,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["stock_code", "date"],
+            set_={
+                "label": stmt.excluded.label,
+                "split": stmt.excluded.split,
+                "sector_id": stmt.excluded.sector_id,
+            },
+        )
+        self.session.execute(stmt)

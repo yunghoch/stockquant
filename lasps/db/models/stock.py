@@ -27,6 +27,9 @@ class Stock(TimestampMixin, Base):
     roe = Column(Numeric(8, 2), nullable=True)
     debt_ratio = Column(Numeric(8, 2), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    # pykrx 원본 섹터 정보 (매핑 검증용)
+    pykrx_sector_idx = Column(String(10), nullable=True)
+    pykrx_sector_name = Column(String(30), nullable=True)
 
     sector = relationship("Sector", back_populates="stocks")
     daily_prices = relationship("DailyPrice", back_populates="stock")

@@ -56,4 +56,3 @@ class InvestorRepository(BaseRepository[InvestorTrading]):
             },
         )
         self.session.execute(stmt)
-        self.session.expire_all()

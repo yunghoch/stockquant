@@ -266,8 +266,9 @@ class TestInvestorRepositoryUpsert:
         assert len(results) == 1
         assert results[0].foreign_net == 500_000
 
-        # upsert 업데이트
+        # upsert 업데이트 (sqlite_insert는 ORM identity map을 우회하므로 expire 필요)
         repo.upsert("005930", datetime.date(2024, 1, 2), 600_000, -300_000)
+        session.expire_all()
         results = repo.get_range(
             "005930", datetime.date(2024, 1, 1), datetime.date(2024, 1, 3)
         )
@@ -296,8 +297,9 @@ class TestIndicatorRepositoryUpsert:
         assert len(results) == 1
         assert results[0].rsi == pytest.approx(55.3)
 
-        # upsert 업데이트
+        # upsert 업데이트 (sqlite_insert는 ORM identity map을 우회하므로 expire 필요)
         repo.upsert("005930", datetime.date(2024, 1, 2), {"ma5": 70500.0, "rsi": 60.0})
+        session.expire_all()
         results = repo.get_range(
             "005930", datetime.date(2024, 1, 1), datetime.date(2024, 1, 3)
         )

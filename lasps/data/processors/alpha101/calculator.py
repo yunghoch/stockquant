@@ -49,7 +49,7 @@ class Alpha101Calculator:
             low: DataFrame with low prices
             close: DataFrame with close prices
             volume: DataFrame with trading volumes
-            vwap: Optional VWAP (uses close if not provided)
+            vwap: Optional VWAP (VWAP-dependent alphas will fail if not provided)
             cap: Optional market capitalization
             industry: Optional Series mapping stock_code to industry_code
 

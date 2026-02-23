@@ -80,7 +80,6 @@ class PriceRepository(BaseRepository[DailyPrice]):
             },
         )
         self.session.execute(stmt)
-        self.session.expire_all()
         return len(records)
 
     def to_dataframe(self, prices: List[DailyPrice]) -> pd.DataFrame:

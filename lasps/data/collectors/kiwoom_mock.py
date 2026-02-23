@@ -17,6 +17,10 @@ MOCK_STOCKS = {
                "시가총액": "25000000000000", "PER": "5.0", "PBR": "0.5", "ROE": "9.0"},
 }
 
+# Mock 시장 분류 (KOSPI / KOSDAQ)
+_MOCK_KOSPI = ["005930", "000660", "005380", "105560"]
+_MOCK_KOSDAQ = ["035420"]
+
 
 class KiwoomMockAPI(KiwoomAPIBase):
     """키움 OpenAPI Mock (GBM 기반 현실적 가격 생성)"""
@@ -24,16 +28,25 @@ class KiwoomMockAPI(KiwoomAPIBase):
     def __init__(self, seed: int = 42):
         self._rng = np.random.RandomState(seed)
 
+    def get_code_list_by_market(self, market: str) -> List[str]:
+        """Mock 시장별 종목코드 조회."""
+        if market == "0":
+            return list(_MOCK_KOSPI)
+        elif market == "10":
+            return list(_MOCK_KOSDAQ)
+        return []
+
     def request(self, tr_code: str, **kwargs) -> Union[Dict, List[Dict]]:
         stock_code = kwargs.get("종목코드", "005930")
+        days = kwargs.get("조회일수", 200)
         if tr_code == "OPT10001":
             return self._stock_info(stock_code)
         elif tr_code == "OPT10081":
-            return self._daily_ohlcv(stock_code)
+            return self._daily_ohlcv(stock_code, days=days)
         elif tr_code == "OPT10059":
-            return self._investor_data(stock_code)
+            return self._investor_data(stock_code, days=days)
         elif tr_code == "OPT10014":
-            return self._short_selling(stock_code)
+            return self._short_selling(stock_code, days=days)
         else:
             raise ValueError(f"Unknown TR code: {tr_code}")
 
@@ -56,7 +69,7 @@ class KiwoomMockAPI(KiwoomAPIBase):
         }
 
     def _daily_ohlcv(self, stock_code: str, days: int = 200) -> List[Dict]:
-        dates = pd.bdate_range(end=pd.Timestamp.today(), periods=days)
+        dates = pd.bdate_range(start="2015-01-02", periods=days)
         base_price = self._rng.uniform(10000, 200000)
         returns = self._rng.normal(0.0005, 0.02, days)
         prices = base_price * np.cumprod(1 + returns)
@@ -77,7 +90,7 @@ class KiwoomMockAPI(KiwoomAPIBase):
         return rows
 
     def _investor_data(self, stock_code: str, days: int = 200) -> List[Dict]:
-        dates = pd.bdate_range(end=pd.Timestamp.today(), periods=days)
+        dates = pd.bdate_range(start="2015-01-02", periods=days)
         rows = []
         for date in dates:
             foreign = int(self._rng.normal(0, 500000))
@@ -90,7 +103,7 @@ class KiwoomMockAPI(KiwoomAPIBase):
         return rows
 
     def _short_selling(self, stock_code: str, days: int = 200) -> List[Dict]:
-        dates = pd.bdate_range(end=pd.Timestamp.today(), periods=days)
+        dates = pd.bdate_range(start="2015-01-02", periods=days)
         rows = []
         for date in dates:
             rows.append({

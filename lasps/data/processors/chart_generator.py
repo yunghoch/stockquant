@@ -1,5 +1,6 @@
 import matplotlib
 matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 import io
 import numpy as np
@@ -32,22 +33,28 @@ class ChartGenerator:
             224x224 RGB PIL Image
         """
         buf = io.BytesIO()
-        mpf.plot(
-            ohlcv_df,
-            type="candle",
-            style=self.style,
-            mav=(5, 20),
-            volume=False,
-            axisoff=True,
-            figsize=self.figsize,
-            savefig=dict(
-                fname=buf, dpi=self.dpi, pad_inches=0, bbox_inches="tight"
-            ),
-        )
-        buf.seek(0)
-        img = Image.open(buf).convert("RGB")
-        img = img.resize((CHART_IMAGE_SIZE, CHART_IMAGE_SIZE), Image.LANCZOS)
-        return img
+        try:
+            mpf.plot(
+                ohlcv_df,
+                type="candle",
+                style=self.style,
+                mav=(5, 20),
+                volume=False,
+                axisoff=True,
+                figsize=self.figsize,
+                savefig=dict(
+                    fname=buf, dpi=self.dpi, pad_inches=0, bbox_inches="tight"
+                ),
+            )
+            buf.seek(0)
+            img_raw = Image.open(buf)
+            img = img_raw.convert("RGB")
+            img = img.resize((CHART_IMAGE_SIZE, CHART_IMAGE_SIZE), Image.LANCZOS)
+            img_raw.close()
+            return img
+        finally:
+            plt.close("all")
+            buf.close()
 
     def generate_tensor(self, ohlcv_df: pd.DataFrame) -> torch.Tensor:
         """OHLCV DataFrame을 (3, 224, 224) 텐서로 변환한다.

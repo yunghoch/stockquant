@@ -26,9 +26,14 @@ except ImportError:
     HAS_PYQT5 = False
 
 
-_REQUEST_TIMEOUT_S = 10.0  # 10초 기본 타임아웃
+_REQUEST_TIMEOUT_S = 30.0  # 30초 기본 타임아웃 (10년치 대량 데이터 수집용)
 _LOGIN_TIMEOUT_S = 120.0  # 로그인 대기 2분
 _POLL_INTERVAL_S = 0.05  # 50ms 폴링 간격
+
+# 키움 API 조회 제한 정책
+_MAX_REQUESTS_PER_HOUR = 1000  # 시간당 최대 요청 수
+_SAFE_REQUESTS_PER_HOUR = 900  # 안전 마진 적용 (90%)
+_HOURLY_PAUSE_SECONDS = 60  # 시간당 제한 도달 시 대기 시간
 
 
 def _ensure_qapp() -> "QApplication":
@@ -73,6 +78,12 @@ class KiwoomRealAPI(KiwoomAPIBase):
 
         # Rate limiting
         self._last_request_time: float = 0.0
+
+        # 시간당 요청 제한 추적
+        self._hourly_request_times: List[float] = []
+
+        # 스크린번호 순환 (0101~0199)
+        self._screen_counter: int = 0
 
     # ── 연결 관리 ──────────────────────────────────────────
 
@@ -122,6 +133,28 @@ class KiwoomRealAPI(KiwoomAPIBase):
 
         return self._connected
 
+    def get_code_list_by_market(self, market: str) -> List[str]:
+        """시장별 종목코드를 조회한다.
+
+        Args:
+            market: 시장 구분 ("0"=KOSPI, "10"=KOSDAQ).
+
+        Returns:
+            종목코드 리스트.
+
+        Raises:
+            ConnectionError: 미연결 상태.
+        """
+        if not self._connected:
+            raise ConnectionError("Not connected to Kiwoom API")
+
+        result = self._ocx.dynamicCall(
+            "GetCodeListByMarket(QString)", market
+        )
+        if not result:
+            return []
+        return [code for code in result.split(";") if code.strip()]
+
     def disconnect(self) -> None:
         """연결 종료."""
         if self._ocx is not None:
@@ -136,6 +169,12 @@ class KiwoomRealAPI(KiwoomAPIBase):
         status = self._ocx.dynamicCall("GetConnectState()")
         self._connected = status == 1
         return self._connected
+
+    def _next_screen_no(self) -> str:
+        """스크린번호를 0101~0199 범위에서 순환 반환한다."""
+        num = 101 + (self._screen_counter % 99)
+        self._screen_counter += 1
+        return f"{num:04d}"
 
     # ── 데이터 요청 ────────────────────────────────────────
 
@@ -188,31 +227,88 @@ class KiwoomRealAPI(KiwoomAPIBase):
             raise ValueError(f"Unknown TR code: {tr_code}")
 
         tr_info = TR_CODES[tr_code]
+        is_data_ex = tr_info.get("data_ex", False)
         all_data: List[Dict] = []
 
         prev_next = 0
         for page in range(max_pages):
-            result = self._send_request(
-                tr_code, tr_info, prev_next=prev_next, **kwargs
-            )
+            try:
+                result = self._send_request(
+                    tr_code, tr_info, prev_next=prev_next, **kwargs
+                )
+            except TimeoutError:
+                if page == 0:
+                    raise  # 첫 페이지 타임아웃은 진짜 오류
+                logger.debug(
+                    f"{tr_code} page {page + 1} timeout, stopping pagination"
+                )
+                break
 
             if isinstance(result, dict):
                 all_data.append(result)
                 break
-            else:
-                all_data.extend(result)
 
-            if self._prev_next == 0:
+            page_rows = len(result)
+            if page_rows == 0:
                 break
-            prev_next = 2
+            all_data.extend(result)
+
+            # data_ex TR은 prev_next 콜백이 신뢰할 수 없으므로
+            # 페이지 행 수가 580 이상이면 다음 페이지가 있다고 판단
+            if is_data_ex:
+                if page_rows < 580:
+                    break
+                prev_next = 2
+            else:
+                if self._prev_next == 0:
+                    break
+                prev_next = 2
+
             logger.debug(
-                f"{tr_code} page {page + 1} fetched ({len(result)} rows)"
+                f"{tr_code} page {page + 1} fetched ({page_rows} rows)"
             )
 
         logger.info(f"{tr_code} request_all: {len(all_data)} total rows")
         return all_data
 
     # ── 내부 메서드 ────────────────────────────────────────
+
+    def _check_hourly_limit(self) -> None:
+        """시간당 요청 제한을 확인하고 필요시 대기한다."""
+        now = time.time()
+        one_hour_ago = now - 3600
+
+        # 1시간 이내의 요청만 유지
+        self._hourly_request_times = [
+            t for t in self._hourly_request_times if t > one_hour_ago
+        ]
+
+        hourly_count = len(self._hourly_request_times)
+
+        # 안전 한도 도달 시 경고 및 대기
+        if hourly_count >= _SAFE_REQUESTS_PER_HOUR:
+            # 가장 오래된 요청이 만료될 때까지 대기
+            if self._hourly_request_times:
+                oldest = self._hourly_request_times[0]
+                wait_time = oldest + 3600 - now + 1  # +1초 여유
+                if wait_time > 0:
+                    logger.warning(
+                        f"시간당 요청 제한 도달 ({hourly_count}/{_MAX_REQUESTS_PER_HOUR}), "
+                        f"{wait_time:.0f}초 대기 중..."
+                    )
+                    time.sleep(min(wait_time, _HOURLY_PAUSE_SECONDS))
+                    # 대기 후 다시 정리
+                    now = time.time()
+                    one_hour_ago = now - 3600
+                    self._hourly_request_times = [
+                        t for t in self._hourly_request_times if t > one_hour_ago
+                    ]
+
+    def get_hourly_request_count(self) -> int:
+        """현재 시간 내 요청 수를 반환한다."""
+        now = time.time()
+        one_hour_ago = now - 3600
+        return len([t for t in self._hourly_request_times if t > one_hour_ago])
 
     def _send_request(
         self,
@@ -222,6 +318,9 @@ class KiwoomRealAPI(KiwoomAPIBase):
         **kwargs: Any,
     ) -> Union[Dict, List[Dict]]:
         """SetInputValue → CommRqData → OnReceiveTrData 대기."""
+        # 시간당 요청 제한 확인
+        self._check_hourly_limit()
+
         # Rate limiting: TR 간격 준수
         interval = TR_CODES.get(tr_code, {}).get("interval", 0.2)
         elapsed = time.time() - self._last_request_time
@@ -240,7 +339,7 @@ class KiwoomRealAPI(KiwoomAPIBase):
         self._tr_done = False
 
         # 요청 전송
-        screen_no = "0101"
+        screen_no = self._next_screen_no()
         rq_name = tr_info["name"]
         ret = self._ocx.dynamicCall(
             "CommRqData(QString, QString, int, QString)",
@@ -262,6 +361,7 @@ class KiwoomRealAPI(KiwoomAPIBase):
             time.sleep(_POLL_INTERVAL_S)
 
         self._last_request_time = time.time()
+        self._hourly_request_times.append(self._last_request_time)
 
         if not self._response_data:
             raise TimeoutError(

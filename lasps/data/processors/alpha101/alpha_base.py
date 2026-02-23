@@ -8,6 +8,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from typing import Dict, Optional
 from dataclasses import dataclass
+from loguru import logger
 
 from .operators import (
     rank, scale, signedpower, log, sign, abs_, max_, min_,
@@ -64,9 +65,9 @@ class MarketData:
         self._adv150 = None
         self._adv180 = None
 
-        # Use close as vwap if not provided
+        # VWAP이 없으면 None 유지 — VWAP 의존 알파는 NaN 반환해야 함
         if self.vwap is None:
-            self.vwap = self.close.copy()
+            logger.warning("VWAP data not provided. VWAP-dependent alphas will return NaN.")
 
     @property
     def returns_(self) -> pd.DataFrame:
@@ -108,10 +109,20 @@ class AlphaBase(ABC):
         self.low = data.low
         self.close = data.close
         self.volume = data.volume
-        self.vwap = data.vwap
+        self._vwap = data.vwap
         self.cap = data.cap
         self.industry = data.industry
         self.returns_ = data.returns_
+
+    @property
+    def vwap(self) -> pd.DataFrame:
+        """VWAP data. Raises error if not provided."""
+        if self._vwap is None:
+            raise ValueError(
+                "VWAP data required but not provided. "
+                "This alpha cannot be computed without real VWAP data."
+            )
+        return self._vwap
 
     def adv(self, d: int) -> pd.DataFrame:
         """Average daily volume over d days."""
