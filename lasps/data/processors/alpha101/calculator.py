@@ -12,6 +12,7 @@ from loguru import logger
 from .alpha_base import MarketData
 from .simple_alphas import SimpleAlphas
 from .industry_alphas import IndustryAlphas
+from .relative_strength import RelativeStrengthAlphas
 
 
 class Alpha101Calculator:
@@ -40,6 +41,7 @@ class Alpha101Calculator:
         vwap: Optional[pd.DataFrame] = None,
         cap: Optional[pd.DataFrame] = None,
         industry: Optional[pd.Series] = None,
+        index_close: Optional[pd.Series] = None,
     ):
         """Initialize with market data.
 
@@ -52,6 +54,8 @@ class Alpha101Calculator:
             vwap: Optional VWAP (VWAP-dependent alphas will fail if not provided)
             cap: Optional market capitalization
             industry: Optional Series mapping stock_code to industry_code
+            index_close: Optional Series (dates -> benchmark index close),
+                         required for RS alphas 201-205
 
         All DataFrames must have the same shape and aligned indices/columns.
         """
@@ -78,6 +82,13 @@ class Alpha101Calculator:
                 self.industry_alphas = IndustryAlphas(self.data)
             except ValueError as e:
                 logger.warning(f"Industry alphas not available: {e}")
+
+        # Initialize relative strength alphas
+        self.rs_alphas = None
+        if index_close is not None:
+            self.rs_alphas = RelativeStrengthAlphas(
+                close, self.data.returns_, index_close
+            )
 
         # Cache computed alphas
         self._cache: Dict[int, pd.DataFrame] = {}
@@ -143,7 +154,7 @@ class Alpha101Calculator:
         """Compute a single alpha.
 
         Args:
-            alpha_id: Alpha number (1-101)
+            alpha_id: Alpha number (1-101 for Alpha101, 201-205 for RS alphas)
             use_cache: Whether to use cached result if available
 
         Returns:
@@ -151,12 +162,21 @@ class Alpha101Calculator:
 
         Raises:
             NotImplementedError: If alpha_id is not implemented
+            ValueError: If required data is missing
         """
         if use_cache and alpha_id in self._cache:
             return self._cache[alpha_id]
 
         # Determine which calculator to use
-        if alpha_id in SimpleAlphas.INDUSTRY_ALPHAS:
+        if alpha_id >= 201:
+            # Relative Strength custom alphas
+            if self.rs_alphas is None:
+                raise ValueError(
+                    f"Alpha {alpha_id} requires index_close data. "
+                    "Pass index_close to Alpha101Calculator."
+                )
+            result = self.rs_alphas.compute(alpha_id)
+        elif alpha_id in SimpleAlphas.INDUSTRY_ALPHAS:
             if self.industry_alphas is None:
                 raise ValueError(f"Alpha {alpha_id} requires industry data")
             result = self.industry_alphas.compute(alpha_id)
@@ -217,6 +237,9 @@ class Alpha101Calculator:
 
         if include_industry and self.industry_alphas is not None:
             alpha_ids.extend(self.industry_alphas.get_implemented_alphas())
+
+        if self.rs_alphas is not None:
+            alpha_ids.extend(self.rs_alphas.get_implemented_alphas())
 
         return self.compute_batch(alpha_ids, use_cache=use_cache, skip_errors=skip_errors)
 

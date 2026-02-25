@@ -8,5 +8,6 @@ This module implements all 101 alpha factors for stock prediction.
 
 from .operators import *
 from .calculator import Alpha101Calculator
+from .relative_strength import RelativeStrengthAlphas
 
-__all__ = ['Alpha101Calculator']
+__all__ = ['Alpha101Calculator', 'RelativeStrengthAlphas']
