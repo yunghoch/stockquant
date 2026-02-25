@@ -6,6 +6,27 @@ Claude가 수행한 모든 작업을 기록합니다.
 
 ## 2026-02-25
 
+### [PM] 통합 알파 분석 스크립트 생성
+- **작업**: `scripts/daily_alpha.py` 신규 생성 — DB 업데이트 + 알파 평가 + 투표 종목 선정 + 마크다운 리포트를 하나의 스크립트로 통합
+- **명령어**: `python scripts/daily_alpha.py`
+- **결과**: 6-Step 통합 파이프라인 구현 (update_db → load_data → compute_alphas → evaluate_alphas → select_stocks_by_voting → generate_report)
+- **비고**: `select_today.py` 기반 + pykrx DB 업데이트 추가, 리포트 저장 `docs/result/YYYY-MM-DD_alpha.md`
+
+### [14:30] 오늘 날짜 기준 Top 10 알파 선정 + 투표 종목 추천
+- **작업**: `scripts/select_today.py` 신규 생성 — 최근 1년(2025-02-25~2026-02-25) 백테스트로 Top 10 알파 선정 후 투표 전략으로 오늘의 매수 종목 추천
+- **Top 10 알파**: alpha_088(+435.1%), alpha_052_rev(+148.2%), alpha_014(+133.5%), alpha_034_rev(+127.4%), alpha_029_rev(+121.7%), alpha_012(+106.7%), alpha_083_rev(+104.2%), alpha_101(+102.3%), alpha_051_rev(+94.5%), alpha_049_rev(+93.0%)
+- **이전 Top10과 겹침: 2개** (alpha_083_rev, alpha_049_rev) — 나머지 8개는 신규 진입
+- **최종 매수 추천 (투표 Top 5)**:
+  1. 003240 (대교) — 5표
+  2. 000150 (두산) — 5표
+  3. 298040 (효성중공업) — 4표
+  4. 010130 (고려아연) — 3표
+  5. 002380 (KCC) — 2표
+
+### [13:50] DB 업데이트 (2026-02-25까지)
+- **작업**: pykrx를 사용하여 daily_prices, index_prices를 2026-02-25까지 업데이트
+- **결과**: 3거래일(2/23, 2/24, 2/25) 추가, daily_prices 8,310건, index_prices 6건(KOSPI+KOSDAQ)
+
 ### [11:48] 2024년 기준 Top 10 알파 재선정 + 투표 시뮬레이션
 - **작업**: `scripts/simulate_voting_2024.py` 신규 생성 — 2024년 데이터로 전체 알파 재평가 후 투표 전략 시뮬
 - **2024 Top10**: alpha_051, alpha_016, alpha_085_rev, alpha_043, alpha_019, alpha_030, alpha_083, alpha_046_rev, alpha_055, alpha_008_rev
