@@ -6,6 +6,12 @@ Claude가 수행한 모든 작업을 기록합니다.
 
 ## 2026-02-25
 
+### 키움 OpenAPI 매수/매도 주문 스크립트 생성
+- **작업**: `scripts/kiwoom_order.py` 신규 생성 + `lasps/config/tr_config.py`에 OPT10075 추가
+- **명령어**: `python scripts/kiwoom_order.py buy 005380 10 250000` (지정가 매수 예시)
+- **결과**: KiwoomTrader 클래스 구현 — 지정가/시장가 매수·매도, 미체결 조회·취소, 장 마감(15:20) 자동 취소
+- **비고**: KiwoomRealAPI COM 패턴 재사용, 안전장치(주문 확인 3초 대기, 장 시간 체크, 최대 금액 1억 제한)
+
 ### [PM] 통합 알파 분석 스크립트 생성
 - **작업**: `scripts/daily_alpha.py` 신규 생성 — DB 업데이트 + 알파 평가 + 투표 종목 선정 + 마크다운 리포트를 하나의 스크립트로 통합
 - **명령어**: `python scripts/daily_alpha.py`
